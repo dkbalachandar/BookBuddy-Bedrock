@@ -20,20 +20,41 @@ st.set_page_config(
 @st.cache_resource
 def initialize_bookbuddy():
     """Initialize BookBuddy agent (cached to avoid recreating)."""
+    import os
+    
+    # Set AWS credentials from Streamlit secrets
+    try:
+        if hasattr(st, 'secrets') and 'aws' in st.secrets:
+            os.environ['AWS_ACCESS_KEY_ID'] = st.secrets['aws']['AWS_ACCESS_KEY_ID']
+            os.environ['AWS_SECRET_ACCESS_KEY'] = st.secrets['aws']['AWS_SECRET_ACCESS_KEY']
+            os.environ['AWS_DEFAULT_REGION'] = st.secrets['aws']['AWS_DEFAULT_REGION']
+            st.success("✅ AWS credentials loaded from Streamlit secrets")
+        else:
+            st.warning("⚠️ No AWS secrets found. Using default credentials.")
+    except Exception as e:
+        st.error(f"❌ Error loading AWS credentials: {e}")
+        return None
+    
     config = {
         "agent_name": "BookBuddy",
         "foundation_model": "anthropic.claude-3-haiku-20240307-v1:0",
         "alias_name": "BookBuddy",
-        "region": "us-east-1"
+        "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
     }
     
     bookbuddy = BookBuddyAgent(**config)
     
     with st.spinner("🚀 Initializing BookBuddy..."):
-        if bookbuddy.initialize():
-            return bookbuddy
-        else:
-            st.error("❌ Failed to initialize BookBuddy. Please check your AWS credentials.")
+        try:
+            if bookbuddy.initialize():
+                st.success("✅ BookBuddy initialized successfully!")
+                return bookbuddy
+            else:
+                st.error("❌ Failed to initialize BookBuddy. Please check your AWS credentials and Bedrock model access.")
+                return None
+        except Exception as e:
+            st.error(f"❌ BookBuddy initialization error: {str(e)}")
+            st.info("💡 Make sure you have enabled Claude 3 Haiku model access in AWS Bedrock console")
             return None
 
 # Main UI
@@ -65,12 +86,42 @@ def main():
         
         st.header("🔧 Settings")
         session_id = st.text_input("Session ID", value=f"session-{int(time.time())}")
+        
+        # Debug info
+        with st.expander("🔍 Debug Info"):
+            import os
+            st.write("**Environment Variables:**")
+            st.write(f"AWS_ACCESS_KEY_ID: {'✅ Set' if os.environ.get('AWS_ACCESS_KEY_ID') else '❌ Not set'}")
+            st.write(f"AWS_SECRET_ACCESS_KEY: {'✅ Set' if os.environ.get('AWS_SECRET_ACCESS_KEY') else '❌ Not set'}")
+            st.write(f"AWS_DEFAULT_REGION: {os.environ.get('AWS_DEFAULT_REGION', 'Not set')}")
+            
+            if hasattr(st, 'secrets'):
+                st.write("**Streamlit Secrets:**")
+                st.write(f"AWS secrets available: {'✅ Yes' if 'aws' in st.secrets else '❌ No'}")
+            else:
+                st.write("**Streamlit Secrets:** ❌ Not available")
     
     # Initialize BookBuddy
     bookbuddy = initialize_bookbuddy()
     
     if bookbuddy is None:
         st.error("❌ BookBuddy is not available. Please check your configuration.")
+        
+        # Show demo mode
+        st.info("🎭 **Demo Mode**: Here's what BookBuddy would recommend for 'motivational books':")
+        st.markdown("""
+        📚 **Atomic Habits** by James Clear  
+        Build good habits and break bad ones with this practical guide  
+        🛒 Buy: https://amazon.com/s?k=Atomic+Habits+James+Clear
+        
+        📚 **The 7 Habits of Highly Effective People** by Stephen Covey  
+        Timeless principles for personal and professional effectiveness  
+        🛒 Buy: https://amazon.com/s?k=The+7+Habits+of+Highly+Effective+People+Stephen+Covey
+        
+        📚 **Mindset** by Carol Dweck  
+        How a simple idea about the brain can help you learn and grow  
+        🛒 Buy: https://amazon.com/s?k=Mindset+Carol+Dweck
+        """)
         return
     
     # Main chat interface
