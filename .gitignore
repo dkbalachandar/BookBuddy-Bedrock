@@ -2,3 +2,13 @@ __pycache__/
 *.pyc
 .env
 
+# AWS credentials and config
+.aws/
+credentials
+config
+*.pem
+*.key
+
+# Streamlit secrets (local development)
+.streamlit/secrets.toml
+
